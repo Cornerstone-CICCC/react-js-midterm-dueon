@@ -3,6 +3,15 @@ import bcrypt from "bcrypt";
 import { IUser, User } from "../models/user.model";
 import userService from "../services/user.service";
 
+const getAllUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await userService.getAll();
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch users" });
+  }
+};
+
 /**
  * Sign up (add user)
  *
@@ -53,37 +62,30 @@ const signup = async (
  * @param {Request<{}, {}, { email: string; password: string }>} req
  * @param {Response} res
  */
-const login = async (
-  req: Request<{}, {}, Omit<IUser, "id" | "username">>,
-  res: Response
-) => {
+const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
-
-  if (!email.trim() || !password.trim()) {
-    res.status(400).json({ message: "Email or password cannot be empty!" });
-    return;
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email or password required" });
   }
 
   const user = await userService.getByEmail(email);
-  if (!user) {
-    res.status(400).json({ message: "Incorrect email or password!" });
-    return;
-  }
-
-  // Check password
-  const passwordCheck = await bcrypt.compare(password, user.password);
-  if (!passwordCheck) {
-    res.status(400).json({ message: "Incorrect email or password!" });
-    return;
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    return res.status(400).json({ message: "Incorrect credentials" });
   }
 
   if (req.session) {
     req.session.isLoggedIn = true;
-    req.session.userId = user._id.toString();
+    req.session.userId = (user._id as any).toString();
     req.session.username = user.username;
+    req.session.status = user.status;
+    req.session.role = user.role;
   }
 
-  res.status(200).json({ message: "Login successful!" });
+  res.status(200).json({
+    message: "Login successful!",
+    role: user.role,
+    username: user.username,
+  });
 };
 
 /**
@@ -114,6 +116,7 @@ const getUserByUsername = async (req: Request, res: Response) => {
   res.status(200).json({
     username: foundUser.username,
     email: foundUser.email,
+    role: foundUser.role,
   });
 };
 
@@ -134,13 +137,6 @@ const updateAccount = async (req: Request, res: Response) => {
     const userId = req.session.userId;
 
     const { username, email, currPassword, newPassword } = req.body;
-
-    //Email duplication check
-    const findemail = await userService.getByEmail(email);
-    if (findemail) {
-      res.status(409).json({ message: "This email is already registered." });
-      return;
-    }
 
     if (!username && !email && !currPassword && !newPassword) {
       res.status(400).json({ message: "Nothing to update!" });
@@ -194,18 +190,19 @@ const updateAccount = async (req: Request, res: Response) => {
  * @param {Response} res
  */
 const logout = (req: Request, res: Response) => {
-  if (!req.session) {
-    return res.status(200).json({ message: "Already logged out." });
-  }
+  if (req.session && Object.keys(req.session).length > 0) {
+    try {
+      req.session = null;
+      res.clearCookie("session");
 
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ message: "Logout failed." });
+      return res.status(200).json({ message: "Logout successful!" });
+    } catch (err) {
+      console.error("Logout Error:", err);
+      return res.status(500).json({ message: "Logout failed" });
     }
-
-    res.clearCookie("connect.sid");
-    res.status(200).json({ message: "Logout successful!" });
-  });
+  } else {
+    return res.status(200).json({ message: "Already logged out" });
+  }
 };
 
 /**
@@ -222,20 +219,22 @@ const deleteAccount = async (req: Request, res: Response) => {
 
   const { userId } = req.session;
 
-  const deleted = await userService.remove(userId);
-
-  if (!deleted) {
-    return res.status(400).json({ message: "Failed to delete user!" });
-  }
-
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ message: "Failed to destroy session." });
+  try {
+    const deleted = await userService.remove(userId);
+    if (!deleted) {
+      return res.status(400).json({ message: "Failed to delete user!" });
     }
 
-    res.clearCookie("connect.sid");
-    res.status(200).json({ message: "Account deleted successfully!" });
-  });
+    req.session = null;
+    res.clearCookie("session");
+
+    return res.status(200).json({ message: "Account deleted successfully!" });
+  } catch (error) {
+    console.error("Delete Account Error:", error);
+    return res
+      .status(500)
+      .json({ message: "An error occurred during deletion." });
+  }
 };
 
 export default {
@@ -245,4 +244,5 @@ export default {
   updateAccount,
   logout,
   deleteAccount,
+  getAllUsers,
 };

@@ -5,61 +5,66 @@ import cors from "cors";
 import cookieSession from "cookie-session";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-//import scoreRoutes from "./routes/score.routes";
 
 dotenv.config();
 import userRouter from "./routes/user.routes";
+import productRouter from "./routes/product.routes";
+import reviewRouter from "./routes/review.routes";
+import cartRouter from "./routes/cart.routes";
 
-// Create server
+import paymentRouter from "./routes/payment.route";
+
 const app = express();
 
-// Middleware
 app.use(
   cors({
-    origin: "http://localhost:4321",
+    origin: "http://localhost:5173",
     credentials: true,
   })
 );
+
 if (!process.env.COOKIE_PRIMARY_KEY || !process.env.COOKIE_SECONDARY_KEY) {
   throw new Error("Missing cookie keys!");
 }
 
-app.use(express.json());
-//app.use("/score", scoreRoutes);
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 app.use(
   cookieSession({
     name: "session",
     keys: [process.env.COOKIE_PRIMARY_KEY, process.env.COOKIE_SECONDARY_KEY],
-    maxAge: 3 * 30 * 24 * 60 * 60 * 1000, // 3 months
+    maxAge: 3 * 30 * 24 * 60 * 60 * 1000,
+    secure: false,
+    sameSite: "lax",
   })
 );
 
-// Routes write your router
 app.use("/users", userRouter);
+app.use("/product", productRouter);
+app.use("/review", reviewRouter);
+app.use("/cart", cartRouter);
+app.use("/payments", paymentRouter);
 
 app.get("/", (req: Request, res: Response) => {
   res.status(200).send("Server is running!");
 });
 
-// Create HTTP server and attach Socket.IO
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:4321", // Your frontend url here (Astro, React, vanilla HTML)
+    origin: true,
     methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
-// Connect to MongoDB and start server
 const MONGO_URI = process.env.DATABASE_URI!;
 mongoose
-  .connect(MONGO_URI, { dbName: "finalproject" })
+  .connect(MONGO_URI, { dbName: "midtermproject" })
   .then(() => {
     console.log("Connected to MongoDB database");
 
-    // Start the server
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);

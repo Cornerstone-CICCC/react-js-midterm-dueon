@@ -1,0 +1,8 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const payment_controller_1 = require("../controllers/payment.controller");
+//import paymentController from "../controllers/payment.controller";
+const router = (0, express_1.Router)();
+router.post("/create-checkout-session", payment_controller_1.createCheckoutSession);
+exports.default = router;

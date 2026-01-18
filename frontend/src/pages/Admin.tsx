@@ -1,7 +1,14 @@
-import React from "react";
+import Inventory from "./admin/Inventory";
+import Users from "./admin/Users";
+import "./admin/AdminStyles.css";
 
 const Admin = () => {
-  return <div></div>;
+  return (
+    <div>
+      <Inventory />
+      <Users />
+    </div>
+  );
 };
 
 export default Admin;
